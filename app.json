@@ -44,11 +44,6 @@
           "cameraPermission": "Allow FestivalPOS to access your camera for QR scanning."
         }
       ]
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "7ebc2f5f-3720-445e-85c0-fefdd9e59456"
-      }
-    }
+    ]
   }
 }
