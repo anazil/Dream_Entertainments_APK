@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "FestivalPOS",
-    "slug": "FestivalPOS",
+    "slug": "festivalpos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,21 +9,47 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#6C63FF"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USB_PERMISSION",
+        "android.permission.RECORD_AUDIO",
+        "smartpos.deviceservice.permission.Printer"
+      ],
+      "package": "com.festivalpos"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow FestivalPOS to access your camera for QR scanning."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7ebc2f5f-3720-445e-85c0-fefdd9e59456"
+      }
+    },
+    "owner": "anazilimc"
   }
 }
