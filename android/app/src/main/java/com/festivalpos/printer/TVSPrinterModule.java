@@ -26,9 +26,15 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
 
     private void initializePrinter() {
         try {
+            // Wait a bit for system to be ready
+            Thread.sleep(1000);
             mDriverManager = DriverManager.getInstance();
             if (mDriverManager != null) {
                 mPrinter = mDriverManager.getPrinter();
+                // Force a status check to wake up the printer
+                if (mPrinter != null) {
+                    mPrinter.getPrinterStatus();
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
