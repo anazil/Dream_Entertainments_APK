@@ -21,9 +21,15 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     public TVSPrinterModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
+        initializePrinter();
+    }
+
+    private void initializePrinter() {
         try {
             mDriverManager = DriverManager.getInstance();
-            mPrinter = mDriverManager.getPrinter();
+            if (mDriverManager != null) {
+                mPrinter = mDriverManager.getPrinter();
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -38,8 +44,11 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     public void printTicket(String ticketData, Promise promise) {
         try {
             if (mPrinter == null) {
-                promise.reject("PRINTER_ERROR", "Printer not initialized");
-                return;
+                initializePrinter();
+                if (mPrinter == null) {
+                    promise.reject("PRINTER_ERROR", "Printer not initialized");
+                    return;
+                }
             }
 
             int printStatus = mPrinter.getPrinterStatus();
@@ -47,21 +56,23 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                 promise.reject("PAPER_OUT", "Out of paper");
                 return;
             }
+            
+            if (printStatus != SdkResult.SDK_OK) {
+                promise.reject("PRINTER_NOT_READY", "Printer status: " + printStatus);
+                return;
+            }
 
-            // Format the ticket
             PrnStrFormat format = new PrnStrFormat();
             format.setTextSize(25);
             format.setStyle(PrnTextStyle.NORMAL);
             format.setFont(PrnTextFont.MONOSPACE);
             format.setAli(Layout.Alignment.ALIGN_CENTER);
 
-            // Print header
             mPrinter.setPrintAppendString("DREAMS ENTERTAINMENT", format);
             mPrinter.setPrintAppendString("================================", format);
 
             format.setAli(Layout.Alignment.ALIGN_NORMAL);
             
-            // Split ticket data and print each line
             String[] lines = ticketData.split("\\n");
             for (String line : lines) {
                 if (line.trim().isEmpty()) {
@@ -71,14 +82,12 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                 }
             }
 
-            // Add some spacing and cut paper
             mPrinter.setPrintAppendString(" ", format);
             mPrinter.setPrintAppendString(" ", format);
             
             int result = mPrinter.setPrintStart();
             
             if (result == SdkResult.SDK_OK) {
-                // Cut paper if supported
                 if (mPrinter.isSuppoerCutter()) {
                     mPrinter.openPrnCutter((byte) 1);
                 }
@@ -96,13 +105,16 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     public void printQRCode(String qrData, Promise promise) {
         try {
             if (mPrinter == null) {
-                promise.reject("PRINTER_ERROR", "Printer not initialized");
-                return;
+                initializePrinter();
+                if (mPrinter == null) {
+                    promise.reject("PRINTER_ERROR", "Printer not initialized");
+                    return;
+                }
             }
 
             int printStatus = mPrinter.getPrinterStatus();
-            if (printStatus == SdkResult.SDK_PRN_STATUS_PAPEROUT) {
-                promise.reject("PAPER_OUT", "Out of paper");
+            if (printStatus != SdkResult.SDK_OK) {
+                promise.reject("PRINTER_NOT_READY", "Printer status: " + printStatus);
                 return;
             }
 
@@ -124,8 +136,11 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     public void checkPrinterStatus(Promise promise) {
         try {
             if (mPrinter == null) {
-                promise.reject("PRINTER_ERROR", "Printer not initialized");
-                return;
+                initializePrinter();
+                if (mPrinter == null) {
+                    promise.reject("PRINTER_ERROR", "Printer not initialized");
+                    return;
+                }
             }
 
             int status = mPrinter.getPrinterStatus();
