@@ -138,9 +138,6 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                 case SdkResult.SDK_PRN_STATUS_PAPEROUT:
                     statusMessage = "Paper out";
                     break;
-                case SdkResult.SDK_PRN_STATUS_OVERHEAT:
-                    statusMessage = "Overheated";
-                    break;
                 default:
                     statusMessage = "Error: " + status;
                     break;
