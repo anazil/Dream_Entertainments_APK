@@ -1,3 +1,0 @@
-C:\Users\Muhammed Anazil T A\Desktop\FestivalPOS\FestivalPOS\node_modules\@react-native-picker\picker\android\src\main\jni\CMakeLists.txt
-C:\Users\Muhammed Anazil T A\Desktop\FestivalPOS\FestivalPOS\node_modules\react-native-svg\android\src\main\jni\CMakeLists.txt
-C:\Users\Muhammed Anazil T A\Desktop\FestivalPOS\FestivalPOS\node_modules\react-native\ReactAndroid\cmake-utils\default-app-setup\CMakeLists.txt

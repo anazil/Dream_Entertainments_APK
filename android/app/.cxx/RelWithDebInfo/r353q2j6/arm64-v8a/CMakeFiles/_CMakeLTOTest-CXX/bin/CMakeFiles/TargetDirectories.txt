@@ -1,4 +1,0 @@
-C:/Users/Muhammed Anazil T A/Desktop/FestivalPOS/FestivalPOS/android/app/.cxx/RelWithDebInfo/r353q2j6/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/foo.dir
-C:/Users/Muhammed Anazil T A/Desktop/FestivalPOS/FestivalPOS/android/app/.cxx/RelWithDebInfo/r353q2j6/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/boo.dir
-C:/Users/Muhammed Anazil T A/Desktop/FestivalPOS/FestivalPOS/android/app/.cxx/RelWithDebInfo/r353q2j6/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/edit_cache.dir
-C:/Users/Muhammed Anazil T A/Desktop/FestivalPOS/FestivalPOS/android/app/.cxx/RelWithDebInfo/r353q2j6/arm64-v8a/CMakeFiles/_CMakeLTOTest-CXX/bin/CMakeFiles/rebuild_cache.dir
