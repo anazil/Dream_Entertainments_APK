@@ -9,6 +9,7 @@ import com.facebook.react.bridge.Promise;
 import com.zcs.sdk.DriverManager;
 import com.zcs.sdk.Printer;
 import com.zcs.sdk.SdkResult;
+import com.zcs.sdk.Sys;
 import com.zcs.sdk.print.PrnStrFormat;
 import com.zcs.sdk.print.PrnTextFont;
 import com.zcs.sdk.print.PrnTextStyle;
@@ -16,7 +17,9 @@ import com.zcs.sdk.print.PrnTextStyle;
 public class TVSPrinterModule extends ReactContextBaseJavaModule {
     private DriverManager mDriverManager;
     private Printer mPrinter;
+    private Sys mSys;
     private ReactApplicationContext reactContext;
+    private boolean isInitialized = false;
 
     public TVSPrinterModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -26,14 +29,21 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
 
     private void initializePrinter() {
         try {
-            // Wait a bit for system to be ready
-            Thread.sleep(1000);
             mDriverManager = DriverManager.getInstance();
             if (mDriverManager != null) {
-                mPrinter = mDriverManager.getPrinter();
-                // Force a status check to wake up the printer
-                if (mPrinter != null) {
-                    mPrinter.getPrinterStatus();
+                mSys = mDriverManager.getBaseSysDevice();
+                
+                // Initialize SDK first
+                int status = mSys.sdkInit();
+                if (status != SdkResult.SDK_OK) {
+                    mSys.sysPowerOn();
+                    Thread.sleep(1000);
+                    status = mSys.sdkInit();
+                }
+                
+                if (status == SdkResult.SDK_OK) {
+                    mPrinter = mDriverManager.getPrinter();
+                    isInitialized = true;
                 }
             }
         } catch (Exception e) {
@@ -49,10 +59,10 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void printTicket(String ticketData, Promise promise) {
         try {
-            if (mPrinter == null) {
+            if (!isInitialized || mPrinter == null) {
                 initializePrinter();
-                if (mPrinter == null) {
-                    promise.reject("PRINTER_ERROR", "Printer not initialized");
+                if (!isInitialized || mPrinter == null) {
+                    promise.reject("PRINTER_ERROR", "SDK not initialized");
                     return;
                 }
             }
@@ -110,12 +120,9 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void printQRCode(String qrData, Promise promise) {
         try {
-            if (mPrinter == null) {
-                initializePrinter();
-                if (mPrinter == null) {
-                    promise.reject("PRINTER_ERROR", "Printer not initialized");
-                    return;
-                }
+            if (!isInitialized || mPrinter == null) {
+                promise.reject("PRINTER_ERROR", "SDK not initialized");
+                return;
             }
 
             int printStatus = mPrinter.getPrinterStatus();
@@ -141,12 +148,9 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void checkPrinterStatus(Promise promise) {
         try {
-            if (mPrinter == null) {
-                initializePrinter();
-                if (mPrinter == null) {
-                    promise.reject("PRINTER_ERROR", "Printer not initialized");
-                    return;
-                }
+            if (!isInitialized || mPrinter == null) {
+                promise.resolve("SDK not initialized");
+                return;
             }
 
             int status = mPrinter.getPrinterStatus();
