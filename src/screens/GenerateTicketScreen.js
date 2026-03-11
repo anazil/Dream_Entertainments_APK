@@ -112,8 +112,27 @@ const GenerateTicketScreen = ({ preSelectedEvent, preSelectedSubEvent, onReconfi
 
   const checkPrinter = async () => {
     try {
+      const { checkPrinterStatus } = require('../services/printerService');
       const status = await checkPrinterStatus();
-      setPrinterStatus(status.status || 'ready');
+      
+      if (status.status === 'ready') {
+        setPrinterStatus('ready');
+      } else if (status.status === 'not_initialized') {
+        setPrinterStatus('not_initialized');
+        
+        // Try to reinitialize automatically
+        try {
+          const { reinitializePrinter } = require('../services/printerService');
+          const reinitSuccess = await reinitializePrinter();
+          if (reinitSuccess) {
+            setPrinterStatus('ready');
+          }
+        } catch (reinitError) {
+          console.log('Auto-reinit failed:', reinitError.message);
+        }
+      } else {
+        setPrinterStatus('error');
+      }
     } catch (error) {
       setPrinterStatus('error');
     }
@@ -484,9 +503,15 @@ const GenerateTicketScreen = ({ preSelectedEvent, preSelectedSubEvent, onReconfi
               <Text style={styles.configLabel}>Sub-Event: {preSelectedSubEvent.name}</Text>
             </View>
             <View style={styles.networkStatus}>
-              <Ionicons name={printerStatus === 'ready' ? "print" : "print-outline"} size={16} color="#fff" />
+              <Ionicons 
+                name={printerStatus === 'ready' ? "print" : printerStatus === 'not_initialized' ? "print-outline" : "warning"} 
+                size={16} 
+                color="#fff" 
+              />
               <Text style={styles.networkText}>
-                {printerStatus === 'ready' ? 'Printer Ready' : 'Printer Error'}
+                {printerStatus === 'ready' ? 'Printer Ready' : 
+                 printerStatus === 'not_initialized' ? 'Printer Initializing' : 
+                 'Printer Error'}
               </Text>
             </View>
           </View>

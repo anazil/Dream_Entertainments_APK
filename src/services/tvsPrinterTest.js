@@ -21,8 +21,43 @@ export const testTVSPrinter = async () => {
       console.log('Printer status:', status);
       ToastAndroid.show(`Printer status: ${status}`, ToastAndroid.LONG);
       
-      if (status === 'Ready') {
-        // Test print
+      // If not initialized, try to reinitialize
+      if (status.includes('Not initialized') || status.includes('Error')) {
+        console.log('🔄 Attempting reinitialization...');
+        ToastAndroid.show('🔄 Reinitializing...', ToastAndroid.SHORT);
+        
+        try {
+          const reinitResult = await TVSPrinter.forceReinitialize();
+          console.log('Reinitialization result:', reinitResult);
+          ToastAndroid.show(`Reinit: ${reinitResult}`, ToastAndroid.LONG);
+          
+          // Check status again
+          const newStatus = await TVSPrinter.checkPrinterStatus();
+          console.log('New status after reinit:', newStatus);
+          ToastAndroid.show(`New status: ${newStatus}`, ToastAndroid.SHORT);
+          
+          if (newStatus === 'Ready') {
+            // Test print
+            const testReceipt = 'TEST PRINT\\n================================\\nTVS SDK Integration Test\\nDate: ' + new Date().toLocaleString() + '\\n================================\\nTest Successful';
+            
+            const result = await TVSPrinter.printTicket(testReceipt);
+            console.log('Test print result:', result);
+            ToastAndroid.show(`Test print: ${result}`, ToastAndroid.LONG);
+            
+            return true;
+          } else {
+            ToastAndroid.show(`Printer still not ready: ${newStatus}`, ToastAndroid.LONG);
+            return false;
+          }
+          
+        } catch (reinitError) {
+          console.error('Reinitialization failed:', reinitError);
+          ToastAndroid.show(`Reinit failed: ${reinitError.message}`, ToastAndroid.LONG);
+          return false;
+        }
+        
+      } else if (status === 'Ready') {
+        // Test print directly
         const testReceipt = 'TEST PRINT\\n================================\\nTVS SDK Integration Test\\nDate: ' + new Date().toLocaleString() + '\\n================================\\nTest Successful';
         
         const result = await TVSPrinter.printTicket(testReceipt);
@@ -59,4 +94,36 @@ export const printSampleTicket = async () => {
   
   const { printTicket } = require('./printerService');
   return await printTicket(sampleTicket);
+};
+
+export const testPrinterInitialization = async () => {
+  try {
+    console.log('=== TESTING PRINTER INITIALIZATION ===');
+    ToastAndroid.show('🔍 Testing printer initialization...', ToastAndroid.SHORT);
+    
+    if (!TVSPrinter) {
+      ToastAndroid.show('❌ TVSPrinter module not available', ToastAndroid.LONG);
+      return false;
+    }
+    
+    // Force reinitialization
+    const reinitResult = await TVSPrinter.forceReinitialize();
+    console.log('Force reinit result:', reinitResult);
+    ToastAndroid.show(`Force reinit: ${reinitResult}`, ToastAndroid.LONG);
+    
+    // Wait a bit
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Check final status
+    const finalStatus = await TVSPrinter.checkPrinterStatus();
+    console.log('Final status:', finalStatus);
+    ToastAndroid.show(`Final status: ${finalStatus}`, ToastAndroid.LONG);
+    
+    return finalStatus === 'Ready';
+    
+  } catch (error) {
+    console.error('Initialization test failed:', error);
+    ToastAndroid.show(`Init test failed: ${error.message}`, ToastAndroid.LONG);
+    return false;
+  }
 };
