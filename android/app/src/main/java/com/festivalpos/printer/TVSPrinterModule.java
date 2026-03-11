@@ -14,11 +14,15 @@ import com.google.zxing.WriterException;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.google.zxing.common.BitMatrix;
 
-import android.device.PrinterManager;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 
 public class TVSPrinterModule extends ReactContextBaseJavaModule {
     private static final String TAG = "TVSPrinterModule";
-    private PrinterManager mPrinter;
+    private Object mPrinter; // Changed from PrinterManager to Object
+    private Class<?> printerManagerClass;
+    private Constructor<?> printerManagerConstructor;
+    private Method openMethod, closeMethod, setupPageMethod, drawTextMethod, drawBarcodeMethod, drawImageMethod, printPageMethod;
     private ReactApplicationContext reactContext;
     private Handler mainHandler;
     
@@ -47,14 +51,38 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
 
     private void initializePrinter() {
         try {
-            Log.d(TAG, "Initializing PrinterManager...");
-            mPrinter = new PrinterManager();
-            Log.d(TAG, "PrinterManager initialized successfully");
+            Log.d(TAG, "Initializing PrinterManager via reflection...");
+            
+            // Load PrinterManager class via reflection
+            printerManagerClass = Class.forName("android.device.PrinterManager");
+            printerManagerConstructor = printerManagerClass.getConstructor();
+            
+            // Get method references
+            openMethod = printerManagerClass.getMethod("open");
+            closeMethod = printerManagerClass.getMethod("close");
+            setupPageMethod = printerManagerClass.getMethod("setupPage", int.class, int.class);
+            drawTextMethod = printerManagerClass.getMethod("drawText", String.class, int.class, int.class, String.class, int.class, boolean.class, boolean.class, int.class);
+            drawBarcodeMethod = printerManagerClass.getMethod("drawBarcode", String.class, int.class, int.class, int.class, int.class, int.class, int.class);
+            drawImageMethod = printerManagerClass.getMethod("drawImage", Bitmap.class, int.class, int.class);
+            printPageMethod = printerManagerClass.getMethod("printPage", int.class);
+            
+            // Create PrinterManager instance
+            mPrinter = printerManagerConstructor.newInstance();
+            
+            Log.d(TAG, "PrinterManager initialized successfully via reflection");
             
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
                     Toast.makeText(reactContext, "Printer initialized successfully", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } catch (ClassNotFoundException e) {
+            Log.w(TAG, "PrinterManager class not found - running on non-TVS device or emulator");
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(reactContext, "Printer not available on this device", Toast.LENGTH_SHORT).show();
                 }
             });
         } catch (Exception e) {
@@ -96,7 +124,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "Starting print operation");
 
             // Open printer
-            int openResult = mPrinter.open();
+            int openResult = (Integer) openMethod.invoke(mPrinter);
             if (openResult != 0) {
                 Log.e(TAG, "Failed to open printer: " + openResult);
                 promise.reject("PRINTER_OPEN_FAILED", "Failed to open printer: " + openResult);
@@ -105,10 +133,10 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "Printer opened successfully");
 
             // Setup page
-            int setupResult = mPrinter.setupPage(PAGE_WIDTH, PAGE_HEIGHT);
+            int setupResult = (Integer) setupPageMethod.invoke(mPrinter, PAGE_WIDTH, PAGE_HEIGHT);
             if (setupResult != 0) {
                 Log.e(TAG, "Failed to setup page: " + setupResult);
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 promise.reject("PAGE_SETUP_FAILED", "Failed to setup page: " + setupResult);
                 return;
             }
@@ -136,7 +164,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                     yPosition += LINE_HEIGHT;
                 } else {
                     // Regular text
-                    mPrinter.drawText(line, MARGIN_LEFT, yPosition, FONT_FAMILY, FONT_SIZE_NORMAL, false, false, 0);
+                    drawTextMethod.invoke(mPrinter, line, MARGIN_LEFT, yPosition, FONT_FAMILY, FONT_SIZE_NORMAL, false, false, 0);
                     yPosition += LINE_HEIGHT;
                 }
             }
@@ -150,25 +178,27 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
 
             // Print the page
             Log.d(TAG, "Printing page...");
-            int printResult = mPrinter.printPage(0);
+            int printResult = (Integer) printPageMethod.invoke(mPrinter, 0);
             
             if (printResult == 0) {
                 Log.d(TAG, "Print successful");
                 
                 // Close printer
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 
                 promise.resolve("Print successful");
             } else {
                 Log.e(TAG, "Print failed with code: " + printResult);
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 promise.reject("PRINT_ERROR", "Print failed with code: " + printResult);
             }
 
         } catch (Exception e) {
             Log.e(TAG, "Print exception: " + e.getMessage(), e);
             try {
-                mPrinter.close();
+                if (closeMethod != null && mPrinter != null) {
+                    closeMethod.invoke(mPrinter);
+                }
             } catch (Exception closeEx) {
                 Log.e(TAG, "Failed to close printer: " + closeEx.getMessage());
             }
@@ -199,7 +229,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             Log.d(TAG, "Starting QR code print operation");
             
             // Open printer
-            int openResult = mPrinter.open();
+            int openResult = (Integer) openMethod.invoke(mPrinter);
             if (openResult != 0) {
                 Log.e(TAG, "Failed to open printer for QR: " + openResult);
                 promise.reject("PRINTER_OPEN_FAILED", "Failed to open printer: " + openResult);
@@ -207,10 +237,10 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             }
 
             // Setup page
-            int setupResult = mPrinter.setupPage(PAGE_WIDTH, PAGE_HEIGHT);
+            int setupResult = (Integer) setupPageMethod.invoke(mPrinter, PAGE_WIDTH, PAGE_HEIGHT);
             if (setupResult != 0) {
                 Log.e(TAG, "Failed to setup page for QR: " + setupResult);
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 promise.reject("PAGE_SETUP_FAILED", "Failed to setup page: " + setupResult);
                 return;
             }
@@ -223,7 +253,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             // Draw QR code using barcode method
             // Type 8 is typically QR code in PrinterManager
             Log.d(TAG, "Drawing QR code at position (" + qrX + ", " + qrY + ")");
-            int drawResult = mPrinter.drawBarcode(qrData, qrX, qrY, qrSize, qrSize, 8, 0);
+            int drawResult = (Integer) drawBarcodeMethod.invoke(mPrinter, qrData, qrX, qrY, qrSize, qrSize, 8, 0);
             
             if (drawResult != 0) {
                 Log.w(TAG, "drawBarcode returned: " + drawResult + ", trying alternative method");
@@ -232,7 +262,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                 try {
                     Bitmap qrBitmap = generateQRCodeBitmap(qrData, qrSize);
                     if (qrBitmap != null) {
-                        mPrinter.drawImage(qrBitmap, qrX, qrY);
+                        drawImageMethod.invoke(mPrinter, qrBitmap, qrX, qrY);
                         qrBitmap.recycle();
                     }
                 } catch (Exception bitmapEx) {
@@ -246,22 +276,24 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
 
             // Print the page
             Log.d(TAG, "Printing QR page...");
-            int printResult = mPrinter.printPage(0);
+            int printResult = (Integer) printPageMethod.invoke(mPrinter, 0);
             
             if (printResult == 0) {
                 Log.d(TAG, "QR Code printed successfully");
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 promise.resolve("QR Code printed successfully");
             } else {
                 Log.e(TAG, "QR Code print failed with code: " + printResult);
-                mPrinter.close();
+                closeMethod.invoke(mPrinter);
                 promise.reject("PRINT_ERROR", "QR Code print failed with code: " + printResult);
             }
 
         } catch (Exception e) {
             Log.e(TAG, "QR print exception: " + e.getMessage(), e);
             try {
-                mPrinter.close();
+                if (closeMethod != null && mPrinter != null) {
+                    closeMethod.invoke(mPrinter);
+                }
             } catch (Exception closeEx) {
                 Log.e(TAG, "Failed to close printer: " + closeEx.getMessage());
             }
@@ -284,11 +316,11 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                     }
 
                     // Try to open printer to check status
-                    int openResult = mPrinter.open();
+                    int openResult = (Integer) openMethod.invoke(mPrinter);
                     
                     if (openResult == 0) {
                         // Printer is ready
-                        mPrinter.close();
+                        closeMethod.invoke(mPrinter);
                         Log.d(TAG, "Printer status: Ready");
                         promise.resolve("Ready");
                     } else if (openResult == -1) {
@@ -319,9 +351,9 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
             public void run() {
                 try {
                     // Close existing printer if open
-                    if (mPrinter != null) {
+                    if (mPrinter != null && closeMethod != null) {
                         try {
-                            mPrinter.close();
+                            closeMethod.invoke(mPrinter);
                         } catch (Exception e) {
                             Log.w(TAG, "Error closing printer during reinit: " + e.getMessage());
                         }
@@ -331,17 +363,21 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
                     Thread.sleep(500);
                     
                     // Reinitialize
-                    mPrinter = new PrinterManager();
-                    Log.d(TAG, "Printer reinitialized successfully");
-                    
-                    mainHandler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            Toast.makeText(reactContext, "Printer reinitialized", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                    
-                    promise.resolve("Reinitialization successful");
+                    if (printerManagerConstructor != null) {
+                        mPrinter = printerManagerConstructor.newInstance();
+                        Log.d(TAG, "Printer reinitialized successfully");
+                        
+                        mainHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(reactContext, "Printer reinitialized", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                        
+                        promise.resolve("Reinitialization successful");
+                    } else {
+                        promise.reject("REINIT_FAILED", "PrinterManager not available");
+                    }
                     
                 } catch (Exception e) {
                     Log.e(TAG, "Reinitialize exception: " + e.getMessage(), e);
@@ -354,17 +390,19 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule {
     // Helper method to draw centered text
     private void drawCenteredText(String text, int y, int fontSize, boolean bold) {
         try {
-            // Approximate text width calculation (rough estimate)
-            int charWidth = fontSize / 2;
-            int textWidth = text.length() * charWidth;
-            int x = (PAGE_WIDTH - textWidth) / 2;
-            
-            // Ensure x is not negative
-            if (x < MARGIN_LEFT) {
-                x = MARGIN_LEFT;
+            if (drawTextMethod != null && mPrinter != null) {
+                // Approximate text width calculation (rough estimate)
+                int charWidth = fontSize / 2;
+                int textWidth = text.length() * charWidth;
+                int x = (PAGE_WIDTH - textWidth) / 2;
+                
+                // Ensure x is not negative
+                if (x < MARGIN_LEFT) {
+                    x = MARGIN_LEFT;
+                }
+                
+                drawTextMethod.invoke(mPrinter, text, x, y, FONT_FAMILY, fontSize, bold, false, 0);
             }
-            
-            mPrinter.drawText(text, x, y, FONT_FAMILY, fontSize, bold, false, 0);
         } catch (Exception e) {
             Log.e(TAG, "Error drawing centered text: " + e.getMessage());
         }
