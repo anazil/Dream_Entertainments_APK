@@ -192,14 +192,14 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
     
     private void cleanup() {
         try {
-            if (mSys != null) {
-                mSys.sdkClose();
-            }
+            // Note: sdkClose() method may not be available in all SDK versions
+            // Just reset the references
             isInitialized = false;
             isInitializing = false;
             mPrinter = null;
             mSys = null;
             mDriverManager = null;
+            Log.d(TAG, "Cleanup completed");
         } catch (Exception e) {
             Log.e(TAG, "Error during cleanup: " + e.getMessage(), e);
         }
@@ -391,14 +391,14 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
                         case SdkResult.SDK_PRN_STATUS_PAPEROUT:
                             statusMessage = "Paper out";
                             break;
-                        case SdkResult.SDK_PRN_STATUS_OVERHEAT:
-                            statusMessage = "Overheated";
-                            break;
-                        case SdkResult.SDK_PRN_STATUS_LOWPOWER:
-                            statusMessage = "Low power";
-                            break;
+                        // Note: Some status constants may not be available in all SDK versions
+                        // Using generic error handling for unknown status codes
                         default:
-                            statusMessage = "Error: " + status;
+                            if (status < 0) {
+                                statusMessage = "Error: " + status;
+                            } else {
+                                statusMessage = "Unknown status: " + status;
+                            }
                             break;
                     }
                     
