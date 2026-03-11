@@ -1,163 +1,68 @@
 package com.festivalpos.printer;
 
-import android.text.Layout;
 import android.widget.Toast;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
+import android.graphics.Bitmap;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
-import com.facebook.react.bridge.LifecycleEventListener;
-import com.zcs.sdk.DriverManager;
-import com.zcs.sdk.Printer;
-import com.zcs.sdk.SdkResult;
-import com.zcs.sdk.Sys;
-import com.zcs.sdk.print.PrnStrFormat;
-import com.zcs.sdk.print.PrnTextFont;
-import com.zcs.sdk.print.PrnTextStyle;
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.WriterException;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.common.BitMatrix;
 
-public class TVSPrinterModule extends ReactContextBaseJavaModule implements LifecycleEventListener {
+import android.device.PrinterManager;
+
+public class TVSPrinterModule extends ReactContextBaseJavaModule {
     private static final String TAG = "TVSPrinterModule";
-    private DriverManager mDriverManager;
-    private Printer mPrinter;
-    private Sys mSys;
+    private PrinterManager mPrinter;
     private ReactApplicationContext reactContext;
-    private boolean isInitialized = false;
-    private boolean isInitializing = false;
     private Handler mainHandler;
-    private int initRetryCount = 0;
-    private static final int MAX_RETRY_COUNT = 3;
-    private static final int INIT_DELAY_MS = 2000;
+    
+    // Printer page settings
+    private static final int PAGE_WIDTH = 384;  // 48mm thermal printer (8 dots/mm)
+    private static final int PAGE_HEIGHT = -1;  // Auto height
+    
+    // Text formatting
+    private static final String FONT_FAMILY = "sans-serif";
+    private static final int FONT_SIZE_NORMAL = 24;
+    private static final int FONT_SIZE_LARGE = 28;
+    private static final int FONT_SIZE_SMALL = 20;
+    
+    // Layout positions
+    private static final int MARGIN_LEFT = 10;
+    private static final int LINE_HEIGHT = 30;
 
     public TVSPrinterModule(ReactApplicationContext reactContext) {
         super(reactContext);
         this.reactContext = reactContext;
         this.mainHandler = new Handler(Looper.getMainLooper());
         
-        // Register lifecycle listener
-        reactContext.addLifecycleEventListener(this);
-        
-        // Delay initialization to allow device services to start
-        delayedInitialization();
+        // Initialize printer
+        initializePrinter();
     }
 
-    private void delayedInitialization() {
-        mainHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                initializePrinter();
-            }
-        }, INIT_DELAY_MS);
-    }
-
-    private synchronized void initializePrinter() {
-        if (isInitialized || isInitializing) {
-            return;
-        }
-        
-        isInitializing = true;
-        Log.d(TAG, "Starting printer initialization, attempt: " + (initRetryCount + 1));
-        
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    // Step 1: Get DriverManager instance
-                    mDriverManager = DriverManager.getInstance();
-                    if (mDriverManager == null) {
-                        Log.e(TAG, "DriverManager.getInstance() returned null");
-                        handleInitializationFailure();
-                        return;
-                    }
-                    Log.d(TAG, "DriverManager obtained successfully");
-                    
-                    // Step 2: Get system device
-                    mSys = mDriverManager.getBaseSysDevice();
-                    if (mSys == null) {
-                        Log.e(TAG, "getBaseSysDevice() returned null");
-                        handleInitializationFailure();
-                        return;
-                    }
-                    Log.d(TAG, "System device obtained successfully");
-                    
-                    // Step 3: Initialize SDK first (without power on)
-                    Log.d(TAG, "Initializing SDK...");
-                    int sdkStatus = mSys.sdkInit();
-                    Log.d(TAG, "SDK init result: " + sdkStatus);
-                    
-                    if (sdkStatus != SdkResult.SDK_OK) {
-                        Log.w(TAG, "First SDK init failed, trying power on sequence...");
-                        
-                        // Try power on then SDK init
-                        int powerResult = mSys.sysPowerOn();
-                        Log.d(TAG, "Power on result: " + powerResult);
-                        
-                        // Wait longer for system to be ready
-                        Thread.sleep(3000);
-                        
-                        sdkStatus = mSys.sdkInit();
-                        Log.d(TAG, "SDK retry after power on: " + sdkStatus);
-                    }
-                    
-                    if (sdkStatus == SdkResult.SDK_OK) {
-                        // Step 4: Get printer instance
-                        mPrinter = mDriverManager.getPrinter();
-                        if (mPrinter == null) {
-                            Log.e(TAG, "getPrinter() returned null");
-                            handleInitializationFailure();
-                            return;
-                        }
-                        
-                        // Step 5: Test printer availability
-                        int printerStatus = mPrinter.getPrinterStatus();
-                        Log.d(TAG, "Printer status: " + printerStatus);
-                        
-                        isInitialized = true;
-                        isInitializing = false;
-                        initRetryCount = 0;
-                        Log.d(TAG, "Printer initialization successful!");
-                        
-                        // Show success toast on main thread
-                        mainHandler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                Toast.makeText(reactContext, "Printer initialized successfully", Toast.LENGTH_SHORT).show();
-                            }
-                        });
-                        
-                    } else {
-                        Log.e(TAG, "SDK initialization failed with status: " + sdkStatus);
-                        handleInitializationFailure();
-                    }
-                    
-                } catch (Exception e) {
-                    Log.e(TAG, "Exception during initialization: " + e.getMessage(), e);
-                    handleInitializationFailure();
-                }
-            }
-        }).start();
-    }
-    
-    private void handleInitializationFailure() {
-        isInitializing = false;
-        initRetryCount++;
-        
-        if (initRetryCount < MAX_RETRY_COUNT) {
-            Log.d(TAG, "Retrying initialization in 3 seconds...");
-            mainHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    initializePrinter();
-                }
-            }, 3000);
-        } else {
-            Log.e(TAG, "Max retry attempts reached. Printer initialization failed.");
+    private void initializePrinter() {
+        try {
+            Log.d(TAG, "Initializing PrinterManager...");
+            mPrinter = new PrinterManager();
+            Log.d(TAG, "PrinterManager initialized successfully");
+            
             mainHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    Toast.makeText(reactContext, "Printer initialization failed after " + MAX_RETRY_COUNT + " attempts", Toast.LENGTH_LONG).show();
+                    Toast.makeText(reactContext, "Printer initialized successfully", Toast.LENGTH_SHORT).show();
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize PrinterManager: " + e.getMessage(), e);
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    Toast.makeText(reactContext, "Printer initialization failed", Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -167,69 +72,15 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
     public String getName() {
         return "TVSPrinter";
     }
-    
-    @Override
-    public void onHostResume() {
-        Log.d(TAG, "onHostResume called");
-        // Re-initialize if not already initialized
-        if (!isInitialized && !isInitializing) {
-            delayedInitialization();
-        }
-    }
-    
-    @Override
-    public void onHostPause() {
-        Log.d(TAG, "onHostPause called");
-        // Keep printer initialized for background operations
-    }
-    
-    @Override
-    public void onHostDestroy() {
-        Log.d(TAG, "onHostDestroy called");
-        cleanup();
-    }
-    
-    private void cleanup() {
-        try {
-            // Note: sdkClose() method may not be available in all SDK versions
-            // Just reset the references
-            isInitialized = false;
-            isInitializing = false;
-            mPrinter = null;
-            mSys = null;
-            mDriverManager = null;
-            Log.d(TAG, "Cleanup completed");
-        } catch (Exception e) {
-            Log.e(TAG, "Error during cleanup: " + e.getMessage(), e);
-        }
-    }
 
     @ReactMethod
     public void printTicket(String ticketData, Promise promise) {
         Log.d(TAG, "printTicket called");
         
-        if (!isInitialized || mPrinter == null) {
-            Log.w(TAG, "Printer not initialized, attempting to initialize...");
-            
-            // Try to initialize synchronously for immediate use
-            if (!isInitializing) {
-                initializePrinter();
-                
-                // Wait a bit for initialization
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }
-            
-            if (!isInitialized || mPrinter == null) {
-                String errorMsg = "Printer not ready. Status: initialized=" + isInitialized + 
-                                ", initializing=" + isInitializing + ", printer=" + (mPrinter != null);
-                Log.e(TAG, errorMsg);
-                promise.reject("PRINTER_NOT_READY", errorMsg);
-                return;
-            }
+        if (mPrinter == null) {
+            Log.e(TAG, "Printer not initialized");
+            promise.reject("PRINTER_NOT_READY", "Printer not initialized");
+            return;
         }
         
         new Thread(new Runnable() {
@@ -244,79 +95,94 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
         try {
             Log.d(TAG, "Starting print operation");
 
-            int printStatus = mPrinter.getPrinterStatus();
-            Log.d(TAG, "Printer status: " + printStatus);
-            
-            if (printStatus == SdkResult.SDK_PRN_STATUS_PAPEROUT) {
-                Log.e(TAG, "Printer out of paper");
-                promise.reject("PAPER_OUT", "Out of paper");
+            // Open printer
+            int openResult = mPrinter.open();
+            if (openResult != 0) {
+                Log.e(TAG, "Failed to open printer: " + openResult);
+                promise.reject("PRINTER_OPEN_FAILED", "Failed to open printer: " + openResult);
                 return;
             }
-            
-            if (printStatus != SdkResult.SDK_OK) {
-                Log.e(TAG, "Printer not ready, status: " + printStatus);
-                promise.reject("PRINTER_NOT_READY", "Printer status: " + printStatus);
+            Log.d(TAG, "Printer opened successfully");
+
+            // Setup page
+            int setupResult = mPrinter.setupPage(PAGE_WIDTH, PAGE_HEIGHT);
+            if (setupResult != 0) {
+                Log.e(TAG, "Failed to setup page: " + setupResult);
+                mPrinter.close();
+                promise.reject("PAGE_SETUP_FAILED", "Failed to setup page: " + setupResult);
                 return;
             }
+            Log.d(TAG, "Page setup successful");
 
-            PrnStrFormat format = new PrnStrFormat();
-            format.setTextSize(25);
-            format.setStyle(PrnTextStyle.NORMAL);
-            format.setFont(PrnTextFont.MONOSPACE);
-            format.setAli(Layout.Alignment.ALIGN_CENTER);
-
-            mPrinter.setPrintAppendString("DREAMS ENTERTAINMENT", format);
-            mPrinter.setPrintAppendString("================================", format);
-
-            format.setAli(Layout.Alignment.ALIGN_NORMAL);
+            // Draw header
+            int yPosition = 20;
             
-            String[] lines = ticketData.split("\\n");
+            // Company name (centered, large)
+            drawCenteredText("DREAMS ENTERTAINMENT", yPosition, FONT_SIZE_LARGE, true);
+            yPosition += LINE_HEIGHT + 10;
+            
+            // Separator line
+            drawCenteredText("================================", yPosition, FONT_SIZE_SMALL, false);
+            yPosition += LINE_HEIGHT;
+
+            // Parse and draw ticket data
+            String[] lines = ticketData.split("\\\\n");
             for (String line : lines) {
                 if (line.trim().isEmpty()) {
-                    mPrinter.setPrintAppendString(" ", format);
+                    yPosition += LINE_HEIGHT / 2;
+                } else if (line.contains("---") || line.contains("===")) {
+                    // Separator lines
+                    drawCenteredText(line, yPosition, FONT_SIZE_SMALL, false);
+                    yPosition += LINE_HEIGHT;
                 } else {
-                    mPrinter.setPrintAppendString(line, format);
+                    // Regular text
+                    mPrinter.drawText(line, MARGIN_LEFT, yPosition, FONT_FAMILY, FONT_SIZE_NORMAL, false, false, 0);
+                    yPosition += LINE_HEIGHT;
                 }
             }
 
-            mPrinter.setPrintAppendString(" ", format);
-            mPrinter.setPrintAppendString(" ", format);
+            // Add some space before footer
+            yPosition += LINE_HEIGHT;
             
-            int result = mPrinter.setPrintStart();
-            Log.d(TAG, "Print start result: " + result);
+            // Footer
+            drawCenteredText("THANK YOU", yPosition, FONT_SIZE_NORMAL, true);
+            yPosition += LINE_HEIGHT * 2;
+
+            // Print the page
+            Log.d(TAG, "Printing page...");
+            int printResult = mPrinter.printPage(0);
             
-            if (result == SdkResult.SDK_OK) {
+            if (printResult == 0) {
                 Log.d(TAG, "Print successful");
                 
-                // Cut paper if supported
-                try {
-                    if (mPrinter.isSuppoerCutter()) {
-                        Log.d(TAG, "Cutting paper");
-                        mPrinter.openPrnCutter((byte) 1);
-                    }
-                } catch (Exception cutterException) {
-                    Log.w(TAG, "Cutter operation failed: " + cutterException.getMessage());
-                }
+                // Close printer
+                mPrinter.close();
                 
                 promise.resolve("Print successful");
             } else {
-                Log.e(TAG, "Print failed with code: " + result);
-                promise.reject("PRINT_ERROR", "Print failed with code: " + result);
+                Log.e(TAG, "Print failed with code: " + printResult);
+                mPrinter.close();
+                promise.reject("PRINT_ERROR", "Print failed with code: " + printResult);
             }
 
         } catch (Exception e) {
             Log.e(TAG, "Print exception: " + e.getMessage(), e);
+            try {
+                mPrinter.close();
+            } catch (Exception closeEx) {
+                Log.e(TAG, "Failed to close printer: " + closeEx.getMessage());
+            }
             promise.reject("PRINT_EXCEPTION", e.getMessage());
         }
     }
 
     @ReactMethod
     public void printQRCode(String qrData, Promise promise) {
-        Log.d(TAG, "printQRCode called");
+        Log.d(TAG, "printQRCode called with data: " + qrData);
         
-        if (!isInitialized || mPrinter == null) {
+        if (mPrinter == null) {
             Log.e(TAG, "Printer not initialized for QR code printing");
-            promise.reject("PRINTER_ERROR", "SDK not initialized");
+            promise.reject("PRINTER_NOT_READY", "Printer not initialized");
             return;
         }
         
@@ -332,30 +198,73 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
         try {
             Log.d(TAG, "Starting QR code print operation");
             
-            int printStatus = mPrinter.getPrinterStatus();
-            Log.d(TAG, "Printer status for QR: " + printStatus);
-            
-            if (printStatus != SdkResult.SDK_OK) {
-                Log.e(TAG, "Printer not ready for QR, status: " + printStatus);
-                promise.reject("PRINTER_NOT_READY", "Printer status: " + printStatus);
+            // Open printer
+            int openResult = mPrinter.open();
+            if (openResult != 0) {
+                Log.e(TAG, "Failed to open printer for QR: " + openResult);
+                promise.reject("PRINTER_OPEN_FAILED", "Failed to open printer: " + openResult);
                 return;
             }
 
-            Log.d(TAG, "Printing QR code: " + qrData);
-            mPrinter.setPrintAppendQRCode(qrData, 200, 200, Layout.Alignment.ALIGN_CENTER);
-            int result = mPrinter.setPrintStart();
-            Log.d(TAG, "QR print result: " + result);
+            // Setup page
+            int setupResult = mPrinter.setupPage(PAGE_WIDTH, PAGE_HEIGHT);
+            if (setupResult != 0) {
+                Log.e(TAG, "Failed to setup page for QR: " + setupResult);
+                mPrinter.close();
+                promise.reject("PAGE_SETUP_FAILED", "Failed to setup page: " + setupResult);
+                return;
+            }
+
+            // Calculate centered position for QR code
+            int qrSize = 200;
+            int qrX = (PAGE_WIDTH - qrSize) / 2;
+            int qrY = 20;
+
+            // Draw QR code using barcode method
+            // Type 8 is typically QR code in PrinterManager
+            Log.d(TAG, "Drawing QR code at position (" + qrX + ", " + qrY + ")");
+            int drawResult = mPrinter.drawBarcode(qrData, qrX, qrY, qrSize, qrSize, 8, 0);
             
-            if (result == SdkResult.SDK_OK) {
+            if (drawResult != 0) {
+                Log.w(TAG, "drawBarcode returned: " + drawResult + ", trying alternative method");
+                
+                // Alternative: Generate QR bitmap and print as image
+                try {
+                    Bitmap qrBitmap = generateQRCodeBitmap(qrData, qrSize);
+                    if (qrBitmap != null) {
+                        mPrinter.drawImage(qrBitmap, qrX, qrY);
+                        qrBitmap.recycle();
+                    }
+                } catch (Exception bitmapEx) {
+                    Log.e(TAG, "Failed to generate QR bitmap: " + bitmapEx.getMessage());
+                }
+            }
+
+            // Add label below QR code
+            int labelY = qrY + qrSize + 20;
+            drawCenteredText("SCAN FOR VERIFICATION", labelY, FONT_SIZE_SMALL, false);
+
+            // Print the page
+            Log.d(TAG, "Printing QR page...");
+            int printResult = mPrinter.printPage(0);
+            
+            if (printResult == 0) {
                 Log.d(TAG, "QR Code printed successfully");
+                mPrinter.close();
                 promise.resolve("QR Code printed successfully");
             } else {
-                Log.e(TAG, "QR Code print failed with code: " + result);
-                promise.reject("PRINT_ERROR", "QR Code print failed with code: " + result);
+                Log.e(TAG, "QR Code print failed with code: " + printResult);
+                mPrinter.close();
+                promise.reject("PRINT_ERROR", "QR Code print failed with code: " + printResult);
             }
 
         } catch (Exception e) {
             Log.e(TAG, "QR print exception: " + e.getMessage(), e);
+            try {
+                mPrinter.close();
+            } catch (Exception closeEx) {
+                Log.e(TAG, "Failed to close printer: " + closeEx.getMessage());
+            }
             promise.reject("PRINT_EXCEPTION", e.getMessage());
         }
     }
@@ -368,41 +277,30 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
             @Override
             public void run() {
                 try {
-                    if (!isInitialized || mPrinter == null) {
+                    if (mPrinter == null) {
                         Log.w(TAG, "Printer not initialized during status check");
-                        
-                        String statusMsg = "Not initialized (initialized=" + isInitialized + 
-                                         ", initializing=" + isInitializing + 
-                                         ", printer=" + (mPrinter != null) + ")";
-                        promise.resolve(statusMsg);
+                        promise.resolve("Not initialized");
                         return;
                     }
 
-                    int status = mPrinter.getPrinterStatus();
-                    Log.d(TAG, "Printer status code: " + status);
+                    // Try to open printer to check status
+                    int openResult = mPrinter.open();
                     
-                    String statusMessage;
-                    
-                    switch (status) {
-                        case SdkResult.SDK_OK:
-                            statusMessage = "Ready";
-                            break;
-                        case SdkResult.SDK_PRN_STATUS_PAPEROUT:
-                            statusMessage = "Paper out";
-                            break;
-                        // Note: Some status constants may not be available in all SDK versions
-                        // Using generic error handling for unknown status codes
-                        default:
-                            if (status < 0) {
-                                statusMessage = "Error: " + status;
-                            } else {
-                                statusMessage = "Unknown status: " + status;
-                            }
-                            break;
+                    if (openResult == 0) {
+                        // Printer is ready
+                        mPrinter.close();
+                        Log.d(TAG, "Printer status: Ready");
+                        promise.resolve("Ready");
+                    } else if (openResult == -1) {
+                        Log.d(TAG, "Printer status: Already open or busy");
+                        promise.resolve("Busy");
+                    } else if (openResult == -2) {
+                        Log.d(TAG, "Printer status: Paper out");
+                        promise.resolve("Paper out");
+                    } else {
+                        Log.d(TAG, "Printer status: Error " + openResult);
+                        promise.resolve("Error: " + openResult);
                     }
-                    
-                    Log.d(TAG, "Printer status message: " + statusMessage);
-                    promise.resolve(statusMessage);
 
                 } catch (Exception e) {
                     Log.e(TAG, "Status check exception: " + e.getMessage(), e);
@@ -420,32 +318,30 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
             @Override
             public void run() {
                 try {
-                    // Reset state
-                    isInitialized = false;
-                    isInitializing = false;
-                    initRetryCount = 0;
-                    
-                    // Cleanup existing resources
-                    cleanup();
+                    // Close existing printer if open
+                    if (mPrinter != null) {
+                        try {
+                            mPrinter.close();
+                        } catch (Exception e) {
+                            Log.w(TAG, "Error closing printer during reinit: " + e.getMessage());
+                        }
+                    }
                     
                     // Wait a bit
-                    Thread.sleep(1000);
+                    Thread.sleep(500);
                     
                     // Reinitialize
-                    initializePrinter();
+                    mPrinter = new PrinterManager();
+                    Log.d(TAG, "Printer reinitialized successfully");
                     
-                    // Wait for initialization
-                    int waitCount = 0;
-                    while (isInitializing && waitCount < 10) {
-                        Thread.sleep(500);
-                        waitCount++;
-                    }
+                    mainHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(reactContext, "Printer reinitialized", Toast.LENGTH_SHORT).show();
+                        }
+                    });
                     
-                    if (isInitialized) {
-                        promise.resolve("Reinitialization successful");
-                    } else {
-                        promise.reject("REINIT_FAILED", "Reinitialization failed");
-                    }
+                    promise.resolve("Reinitialization successful");
                     
                 } catch (Exception e) {
                     Log.e(TAG, "Reinitialize exception: " + e.getMessage(), e);
@@ -455,42 +351,45 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
         }).start();
     }
     
-    @ReactMethod
-    public void checkDeviceService(Promise promise) {
-        Log.d(TAG, "checkDeviceService called");
-        
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    // Check if DriverManager is available
-                    DriverManager dm = DriverManager.getInstance();
-                    if (dm == null) {
-                        promise.resolve("DriverManager not available");
-                        return;
-                    }
-                    
-                    // Check if system device is available
-                    Sys sys = dm.getBaseSysDevice();
-                    if (sys == null) {
-                        promise.resolve("System device not available");
-                        return;
-                    }
-                    
-                    // Check if printer is available
-                    Printer printer = dm.getPrinter();
-                    if (printer == null) {
-                        promise.resolve("Printer device not available");
-                        return;
-                    }
-                    
-                    promise.resolve("All device services available");
-                    
-                } catch (Exception e) {
-                    Log.e(TAG, "Device service check exception: " + e.getMessage(), e);
-                    promise.resolve("Exception: " + e.getMessage());
+    // Helper method to draw centered text
+    private void drawCenteredText(String text, int y, int fontSize, boolean bold) {
+        try {
+            // Approximate text width calculation (rough estimate)
+            int charWidth = fontSize / 2;
+            int textWidth = text.length() * charWidth;
+            int x = (PAGE_WIDTH - textWidth) / 2;
+            
+            // Ensure x is not negative
+            if (x < MARGIN_LEFT) {
+                x = MARGIN_LEFT;
+            }
+            
+            mPrinter.drawText(text, x, y, FONT_FAMILY, fontSize, bold, false, 0);
+        } catch (Exception e) {
+            Log.e(TAG, "Error drawing centered text: " + e.getMessage());
+        }
+    }
+    
+    // Helper method to generate QR code bitmap using ZXing
+    private Bitmap generateQRCodeBitmap(String data, int size) {
+        try {
+            QRCodeWriter writer = new QRCodeWriter();
+            BitMatrix bitMatrix = writer.encode(data, BarcodeFormat.QR_CODE, size, size);
+            
+            int width = bitMatrix.getWidth();
+            int height = bitMatrix.getHeight();
+            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
+            
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < height; y++) {
+                    bitmap.setPixel(x, y, bitMatrix.get(x, y) ? 0xFF000000 : 0xFFFFFFFF);
                 }
             }
-        }).start();
+            
+            return bitmap;
+        } catch (WriterException e) {
+            Log.e(TAG, "Failed to generate QR code bitmap: " + e.getMessage());
+            return null;
+        }
     }
 }

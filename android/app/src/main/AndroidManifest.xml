@@ -8,15 +8,10 @@
   <uses-permission android:name="android.permission.USB_PERMISSION"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-  <uses-permission android:name="smartpos.deviceservice.permission.Printer"/>
   
-  <!-- Additional TVS Smart POS permissions -->
+  <!-- UBX Printer permissions -->
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.DEVICE_POWER"/>
-  <uses-permission android:name="smartpos.deviceservice.permission.SYSTEM"/>
-  <uses-permission android:name="smartpos.deviceservice.permission.DEVICE"/>
-  <uses-permission android:name="com.zcs.permission.PRINTER"/>
-  <uses-permission android:name="com.zcs.permission.SYSTEM"/>
   
   <queries>
     <intent>
@@ -29,13 +24,6 @@
     <meta-data android:name="expo.modules.updates.ENABLED" android:value="false"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH" android:value="ALWAYS"/>
     <meta-data android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS" android:value="0"/>
-    
-    <!-- TVS Smart POS Service Intent Filters -->
-    <service android:name="com.zcs.service.DeviceService" android:enabled="true" android:exported="true">
-      <intent-filter>
-        <action android:name="com.zcs.service.DEVICE_SERVICE" />
-      </intent-filter>
-    </service>
     
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>

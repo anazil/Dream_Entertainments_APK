@@ -156,8 +156,11 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
     
-    // TVS SDK
-    implementation files('libs/SmartPos_1.9.0_R240612.jar')
+    // Device framework JARs (includes android.device.PrinterManager)
+    implementation fileTree(dir: "libs", include: ["*.jar"])
+    
+    // ZXing for QR code generation
+    implementation 'com.google.zxing:core:3.5.1'
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
