@@ -82,28 +82,27 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
                     }
                     Log.d(TAG, "System device obtained successfully");
                     
-                    // Step 3: Power on the system first
-                    Log.d(TAG, "Powering on system...");
-                    int powerResult = mSys.sysPowerOn();
-                    Log.d(TAG, "Power on result: " + powerResult);
-                    
-                    // Wait for system to be ready
-                    Thread.sleep(2000);
-                    
-                    // Step 4: Initialize SDK
+                    // Step 3: Initialize SDK first (without power on)
                     Log.d(TAG, "Initializing SDK...");
                     int sdkStatus = mSys.sdkInit();
                     Log.d(TAG, "SDK init result: " + sdkStatus);
                     
                     if (sdkStatus != SdkResult.SDK_OK) {
-                        Log.w(TAG, "First SDK init failed, retrying...");
-                        Thread.sleep(1000);
+                        Log.w(TAG, "First SDK init failed, trying power on sequence...");
+                        
+                        // Try power on then SDK init
+                        int powerResult = mSys.sysPowerOn();
+                        Log.d(TAG, "Power on result: " + powerResult);
+                        
+                        // Wait longer for system to be ready
+                        Thread.sleep(3000);
+                        
                         sdkStatus = mSys.sdkInit();
-                        Log.d(TAG, "SDK retry result: " + sdkStatus);
+                        Log.d(TAG, "SDK retry after power on: " + sdkStatus);
                     }
                     
                     if (sdkStatus == SdkResult.SDK_OK) {
-                        // Step 5: Get printer instance
+                        // Step 4: Get printer instance
                         mPrinter = mDriverManager.getPrinter();
                         if (mPrinter == null) {
                             Log.e(TAG, "getPrinter() returned null");
@@ -111,7 +110,7 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
                             return;
                         }
                         
-                        // Step 6: Test printer availability
+                        // Step 5: Test printer availability
                         int printerStatus = mPrinter.getPrinterStatus();
                         Log.d(TAG, "Printer status: " + printerStatus);
                         
@@ -451,6 +450,45 @@ public class TVSPrinterModule extends ReactContextBaseJavaModule implements Life
                 } catch (Exception e) {
                     Log.e(TAG, "Reinitialize exception: " + e.getMessage(), e);
                     promise.reject("REINIT_EXCEPTION", e.getMessage());
+                }
+            }
+        }).start();
+    }
+    
+    @ReactMethod
+    public void checkDeviceService(Promise promise) {
+        Log.d(TAG, "checkDeviceService called");
+        
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Check if DriverManager is available
+                    DriverManager dm = DriverManager.getInstance();
+                    if (dm == null) {
+                        promise.resolve("DriverManager not available");
+                        return;
+                    }
+                    
+                    // Check if system device is available
+                    Sys sys = dm.getBaseSysDevice();
+                    if (sys == null) {
+                        promise.resolve("System device not available");
+                        return;
+                    }
+                    
+                    // Check if printer is available
+                    Printer printer = dm.getPrinter();
+                    if (printer == null) {
+                        promise.resolve("Printer device not available");
+                        return;
+                    }
+                    
+                    promise.resolve("All device services available");
+                    
+                } catch (Exception e) {
+                    Log.e(TAG, "Device service check exception: " + e.getMessage(), e);
+                    promise.resolve("Exception: " + e.getMessage());
                 }
             }
         }).start();

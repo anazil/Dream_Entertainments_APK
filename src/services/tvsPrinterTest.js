@@ -106,6 +106,22 @@ export const testPrinterInitialization = async () => {
       return false;
     }
     
+    // Check device service availability first
+    try {
+      const serviceCheck = await TVSPrinter.checkDeviceService();
+      console.log('Device service check:', serviceCheck);
+      ToastAndroid.show(`Service check: ${serviceCheck}`, ToastAndroid.LONG);
+      
+      if (!serviceCheck.includes('All device services available')) {
+        ToastAndroid.show('⚠️ Device services not ready', ToastAndroid.LONG);
+        return false;
+      }
+    } catch (serviceError) {
+      console.error('Service check failed:', serviceError);
+      ToastAndroid.show(`Service check failed: ${serviceError.message}`, ToastAndroid.LONG);
+      return false;
+    }
+    
     // Force reinitialization
     const reinitResult = await TVSPrinter.forceReinitialize();
     console.log('Force reinit result:', reinitResult);
@@ -124,6 +140,26 @@ export const testPrinterInitialization = async () => {
   } catch (error) {
     console.error('Initialization test failed:', error);
     ToastAndroid.show(`Init test failed: ${error.message}`, ToastAndroid.LONG);
+    return false;
+  }
+};
+
+export const checkDeviceServices = async () => {
+  try {
+    if (!TVSPrinter) {
+      ToastAndroid.show('❌ TVSPrinter module not available', ToastAndroid.LONG);
+      return false;
+    }
+    
+    const result = await TVSPrinter.checkDeviceService();
+    console.log('Device services:', result);
+    ToastAndroid.show(`Device services: ${result}`, ToastAndroid.LONG);
+    
+    return result.includes('All device services available');
+    
+  } catch (error) {
+    console.error('Device service check failed:', error);
+    ToastAndroid.show(`Service check error: ${error.message}`, ToastAndroid.LONG);
     return false;
   }
 };
